@@ -1,0 +1,9 @@
+# Ignore compiled files
+*.ts.map
+*.js.map
+
+# Ignore build artifacts
+dist/
+
+# Binary files
+public/faces/*.png binary

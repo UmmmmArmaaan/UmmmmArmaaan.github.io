@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Expressions Preview</title>
+    <script src="https://unpkg.com/react@19/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@19/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .face-grid {
+            background: linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .expression-icon {
+            font-size: 2rem;
+        }
+        .cursor-tracker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #2f4bf0;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <div id="root" class="min-h-screen bg-gray-50"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const FACES = {
+            base: { src: '/faces/base.webp', mood: 'chill', emoji: '👤' },
+            l_left: { src: '/faces/l_left.webp', mood: 'watching you (left)', emoji: '👁️' },
+            l_right: { src: '/faces/l_right.webp', mood: 'watching you (right)', emoji: '👁️' },
+            l_up: { src: '/faces/l_up.webp', mood: 'looking up', emoji: '👀' },
+            l_down: { src: '/faces/l_down.webp', mood: 'looking down', emoji: '👇' },
+            x_cross: { src: '/faces/x_cross.webp', mood: 'cross-eyed', emoji: '👁️👁️' },
+            x_shock: { src: '/faces/x_shock.webp', mood: 'startled', emoji: '😱' },
+            x_whistle: { src: '/faces/x_whistle.webp', mood: 'whistling', emoji: '😮' },
+            x_dizzy: { src: '/faces/x_dizzy.webp', mood: 'seeing stars', emoji: '😵' },
+            g_grab: { src: '/faces/g_grimace.webp', mood: 'grabbed!', emoji: '😣' }
+        };
+
+        function ExpressionPreview() {
+            const [face, setFace] = useState('base');
+            const [position, setPosition] = useState({ x: 0, y: 0 });
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                const updateFace = (x, y) => {
+                    const w = window.innerWidth;
+                    const h = window.innerHeight;
+                    const cx = w / 2;
+                    const cy = h / 2;
+                    const dx = (x - cx) / w;
+                    const dy = (y - cy) / h;
+
+                    if (Math.abs(dy) > 0.15) {
+                        setFace(dy < 0 ? 'x_shock' : 'x_whistle');
+                    } else if (dx < -0.2) {
+                        setFace('l_left');
+                    } else if (dx > 0.2) {
+                        setFace('l_right');
+                    } else if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) {
+                        setFace('x_cross');
+                    } else {
+                        setFace('base');
+                    }
+                };
+
+                const handleMouseMove = (e) => {
+                    setPosition({ x: e.clientX, y: e.clientY });
+                    updateFace(e.clientX, e.clientY);
+                };
+
+                window.addEventListener('mousemove', handleMouseMove);
+                return () => window.removeEventListener('mousemove', handleMouseMove);
+            }, []);
+
+            return (
+                <div className="p-8">
+                    <div className="max-w-2xl mx-auto">
+                        <h1 className="text-3xl font-bold mb-6 text-center">Face Expression Preview</h1>
+
+                        <div className="bg-white rounded-lg shadow p-6 mb-6">
+                            <h2 className="text-xl font-semibold mb-4">Current Expression</h2>
+                            <div className="flex items-center gap-4">
+                                <div className="text-5xl">{FACES[face]?.emoji || '👤'}</div>
+                                <div>
+                                    <p className="text-2xl font-bold">{face.replace('_', ' ').toUpperCase()}</p>
+                                    <p className="text-gray-600">{FACES[face]?.mood}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h2 className="text-xl font-semibold mb-4">All Expressions</h2>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                {Object.entries(FACES).map(([key, face]) => (
+                                    <div key={key} className="border rounded-lg p-4 text-center">
+                                        <div className="text-4xl mb-2">{face.emoji}</div>
+                                        <p className="font-semibold text-sm">{key.replace('_', ' ')}</p>
+                                        <p className="text-xs text-gray-500">{face.mood}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 bg-white rounded-lg shadow p-6">
+                            <h2 className="text-xl font-semibold mb-4">How It Works</h2>
+                            <div className="space-y-3 text-sm">
+                                <p><strong>🖱️ Horizontal Movement:</strong></p>
+                                <ul className="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Move mouse left → <em>l_left</em> (eyes watch)</li>
+                                    <li>Move mouse right → <em>l_right</em> (eyes watch)</li>
+                                </ul>
+
+                                <p><strong>⬆️⬇️ Vertical Movement (NEW):</strong></p>
+                                <ul className="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Move mouse up → <em>x_shock</em> (startled!)</li>
+                                    <li>Move mouse down → <em>x_whistle</em> (innocent)</li>
+                                </ul>
+
+                                <p><strong>👃 Nose Hover:</strong></p>
+                                <ul className="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Move over nose → <em>x_cross</em> (cross-eyed)</li>
+                                </ul>
+
+                                <p><strong>👆 Grab:</strong></p>
+                                <ul className="list-disc list-inside ml-4 text-gray-600">
+                                    <li>Any grab → <em>g_grimace</em> (being squeezed)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="cursor-tracker" style={{ left: position.x, top: position.y }}></div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<ExpressionPreview />, document.getElementById('root'));
+    </script>
+</body>
+</html>
