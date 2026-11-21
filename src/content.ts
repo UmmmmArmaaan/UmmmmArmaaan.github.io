@@ -74,11 +74,11 @@ export const projects = [
 /** Contact info - phone removed as requested */
 export const contact = {
   location: 'Bathinda, Punjab, India',
-  email: 'armaansingh6469@gmail.com',
+  email: 'workwitharmaaaan@gmail.com',
 };
 
 /** Languages */
-export const languages = ['English', 'Hindi'];
+export const languages = ['Punjabi', 'Hindi', 'English'];
 
 /**
  * Every expression is registered to the same 2:3 bust framing, padded to a

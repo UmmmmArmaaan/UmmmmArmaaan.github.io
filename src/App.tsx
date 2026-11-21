@@ -1411,6 +1411,22 @@ function GitHubContributions() {
 }
 
 function ContactSection() {
+  const [emailCopied, setEmailCopied] = useState(false);
+  const gmailComposeUrl =
+    "https://mail.google.com/mail/?view=cm&fs=1" +
+    `&to=${encodeURIComponent(contact.email)}` +
+    `&su=${encodeURIComponent("Portfolio enquiry")}`;
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(contact.email);
+      setEmailCopied(true);
+    } catch {
+      // Clipboard access can be blocked on some browsers; let visitors copy manually.
+      window.prompt("Copy my email address:", contact.email);
+    }
+  };
+
   return (
     <Section id="contact" title="Contact" delay={700}>
       <div className="mx-auto w-full min-w-0 max-w-2xl rounded-3xl border border-line bg-field px-4 py-8 text-center shadow-sm sm:px-8 sm:py-10">
@@ -1446,11 +1462,29 @@ function ContactSection() {
           </a>
         </div>
 
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={gmailComposeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center rounded-full bg-disc px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Send me an email ↗
+          </a>
+          <button
+            type="button"
+            onClick={copyEmail}
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-line bg-page px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-disc hover:text-disc"
+            aria-label="Copy email address"
+          >
+            {emailCopied ? "Email copied" : "Copy email"}
+          </button>
+        </div>
         <a
           href={`mailto:${contact.email}?subject=${encodeURIComponent("Portfolio enquiry")}`}
-          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-disc px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          className="mt-3 inline-block text-xs text-mute underline underline-offset-4 transition-colors hover:text-ink"
         >
-          Send me an email ↗
+          Prefer your default email app?
         </a>
       </div>
     </Section>
