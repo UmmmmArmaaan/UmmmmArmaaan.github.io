@@ -160,14 +160,8 @@ function LightPullThemeSwitcher({
 }
 
 
-/** Decorative mouse cursor. Kept away from the face stage so its grab ring wins. */
-function CustomCursor({
-  dark,
-  stageRef,
-}: {
-  dark: boolean;
-  stageRef: { current: HTMLDivElement | null };
-}) {
+/** One consistent desktop cursor across the entire portfolio, including the face and navbar. */
+function CustomCursor({ dark }: { dark: boolean }) {
   const [enabled, setEnabled] = useState(false);
   const ringRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLSpanElement>(null);
@@ -217,14 +211,9 @@ function CustomCursor({
       }
       dot.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
 
-      const rect = stageRef.current?.getBoundingClientRect();
-      const overFace = !!rect &&
-        event.clientX >= rect.left && event.clientX <= rect.right &&
-        event.clientY >= rect.top && event.clientY <= rect.bottom;
-      // FaceCanvas has its own grab-ring; never draw a second cursor over it.
-      const visible = !overFace;
-      ring.style.opacity = visible ? "1" : "0";
-      dot.style.opacity = visible ? "1" : "0";
+      // Show the same cursor over EVERY element, including FaceCanvas and the sticky navbar.
+      ring.style.opacity = "1";
+      dot.style.opacity = "1";
 
       const el = event.target;
       const interactive = el instanceof Element &&
@@ -235,25 +224,30 @@ function CustomCursor({
     const onUp = () => { ring.dataset.pressed = "0"; };
     const hide = () => { ring.style.opacity = "0"; dot.style.opacity = "0"; };
     const showAfterWindowFocus = () => { initialized = false; hide(); };
+    const onWindowOut = (event: MouseEvent) => {
+      // Do not hide when moving between navbar links, face, and other child elements.
+      if (event.relatedTarget === null) hide();
+    };
 
     frame = window.requestAnimationFrame(animate);
-    document.addEventListener("pointermove", onMove, { passive: true });
-    document.addEventListener("pointerdown", onDown, { passive: true });
-    document.addEventListener("pointerup", onUp, { passive: true });
-    document.addEventListener("pointercancel", onUp, { passive: true });
-    document.addEventListener("mouseleave", hide);
+    // Capture events at the window so the cursor tracks over the face, links and navbar.
+    window.addEventListener("pointermove", onMove, { passive: true, capture: true });
+    window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    window.addEventListener("pointercancel", onUp, { passive: true });
+    window.addEventListener("mouseout", onWindowOut);
     window.addEventListener("blur", showAfterWindowFocus);
     return () => {
       document.documentElement.classList.remove("portfolio-custom-cursor");
       window.cancelAnimationFrame(frame);
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("pointercancel", onUp);
-      document.removeEventListener("mouseleave", hide);
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("mouseout", onWindowOut);
       window.removeEventListener("blur", showAfterWindowFocus);
     };
-  }, [enabled, stageRef]);
+  }, [enabled]);
 
   if (!enabled || typeof document === "undefined") return null;
 
@@ -262,7 +256,7 @@ function CustomCursor({
       <div
         ref={ringRef}
         aria-hidden="true"
-        className="portfolio-cursor-ring pointer-events-none fixed left-0 top-0 z-[120] opacity-0"
+        className="portfolio-cursor-ring pointer-events-none fixed left-0 top-0 z-[9998] opacity-0"
         style={{ color: dark ? "#f8fafc" : "#151823", willChange: "transform" }}
       >
         <svg className="size-11" viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -276,7 +270,7 @@ function CustomCursor({
       <span
         ref={dotRef}
         aria-hidden="true"
-        className="pointer-events-none fixed left-0 top-0 z-[121] size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0"
+        className="pointer-events-none fixed left-0 top-0 z-[9999] size-[7px] rounded-full opacity-0"
         style={{ backgroundColor: dark ? "#f8fafc" : DISC, willChange: "transform" }}
       />
     </>,
@@ -286,45 +280,135 @@ function CustomCursor({
 
 function Header({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {
   const activeSection = useActiveSection();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Close the small profile card when clicking elsewhere or pressing Escape.
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onOutsidePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !profileRef.current?.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+        profileButtonRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onOutsidePointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("pointerdown", onOutsidePointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [profileOpen]);
 
   return (
     <header className="sticky top-0 z-40 w-full min-w-0 max-w-full border-b border-line bg-page/95 px-3 py-3 backdrop-blur md:px-6">
       <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:gap-3">
-        {/* Profile */}
-        <a
-          href="#"
-          className="flex min-w-0 flex-1 items-center gap-2 font-display font-bold lg:flex-none"
-        >
-          <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-disc/10 p-[2px] shadow-sm sm:size-10">
-            <img
-              src={faces.base.src}
-              alt=""
+        {/* Tap/click the avatar or name to open the mini profile. */}
+        <div ref={profileRef} className="relative min-w-0 flex-1 lg:flex-none">
+          <button
+            ref={profileButtonRef}
+            type="button"
+            aria-label="Open profile and social links"
+            aria-haspopup="dialog"
+            aria-expanded={profileOpen}
+            aria-controls="header-profile-card"
+            onClick={() => setProfileOpen((open) => !open)}
+            className="group flex max-w-full items-center gap-2 rounded-full pr-2 text-left font-display font-bold outline-none transition-colors hover:text-disc focus-visible:ring-2 focus-visible:ring-disc focus-visible:ring-offset-2 focus-visible:ring-offset-page"
+          >
+            <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-line bg-disc/10 p-[2px] shadow-sm transition-transform duration-200 group-hover:scale-105 sm:size-10">
+              <img
+                src={faces.base.src}
+                alt=""
+                aria-hidden="true"
+                className="block h-full w-full rounded-full object-contain object-center"
+              />
+            </span>
+            <span className="min-w-0 truncate text-xs sm:text-sm">{person.name}</span>
+            <svg
               aria-hidden="true"
-              className="block h-full w-full rounded-full object-contain object-center"
-            />
-          </span>
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`size-3.5 shrink-0 text-mute transition-transform duration-200 ${profileOpen ? "rotate-180" : ""}`}
+            >
+              <path d="m5 7.5 5 5 5-5" />
+            </svg>
+          </button>
 
-          <span className="min-w-0 truncate text-xs sm:text-sm">
-            {person.name}
-          </span>
-        </a>
+          {profileOpen && (
+            <div
+              id="header-profile-card"
+              role="dialog"
+              aria-label="Profile and social links"
+              className="absolute left-0 top-full z-[60] mt-3 w-[min(340px,calc(100vw-24px))] overflow-hidden rounded-[24px] border border-line bg-page p-4 text-left text-ink shadow-[0_20px_60px_rgba(0,0,0,0.22)] sm:p-5"
+            >
+              <div className="absolute right-[-36px] top-[-40px] size-32 rounded-full bg-disc/10 blur-2xl" aria-hidden="true" />
+              <div className="relative flex items-start gap-3">
+                <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-line bg-field p-1">
+                  <img src={faces.base.src} alt="" className="h-full w-full object-contain" />
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <p className="truncate font-display text-base font-extrabold tracking-tight text-ink">{person.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-disc">Full-stack Developer</p>
+                  <p className="mt-1 text-[11px] text-mute">B.Tech CSE · MRSPTU</p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Close profile popup"
+                  onClick={() => { setProfileOpen(false); profileButtonRef.current?.focus(); }}
+                  className="relative flex size-7 shrink-0 items-center justify-center rounded-full border border-line bg-field text-mute transition-colors hover:text-ink"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="M5 5l10 10M15 5 5 15" />
+                  </svg>
+                </button>
+              </div>
+              <p className="relative mt-4 text-sm leading-relaxed text-mute">
+                I build thoughtful web experiences with React, Next.js, and TypeScript. Always learning, experimenting, and turning ideas into projects.
+              </p>
+              <div className="relative my-4 h-px bg-line" />
+              <p className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-mute">Find me online</p>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href="https://github.com/UmmmmArmaaan"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-line bg-field px-3 py-3 text-xs font-semibold text-ink transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-disc/50 hover:bg-disc/5 focus-visible:outline-2 focus-visible:outline-disc motion-reduce:transform-none"
+                >
+                  <GitHubIcon className="size-4 shrink-0" /> GitHub
+                </a>
+                <a
+                  href="https://www.linkedin.com/in/armandeep-singh-57a350368/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-line bg-field px-3 py-3 text-xs font-semibold text-ink transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-disc/50 hover:bg-disc/5 focus-visible:outline-2 focus-visible:outline-disc motion-reduce:transform-none"
+                >
+                  <LinkedInIcon className="size-4 shrink-0" /> LinkedIn
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Desktop navigation */}
-        <nav
-          aria-label="Desktop navigation"
-          className="hidden items-center gap-1 lg:flex"
-        >
+        <nav aria-label="Desktop navigation" className="hidden items-center gap-1 lg:flex">
           {nav.map((l) => {
             const isActive = activeSection === l.href.replace("#", "");
-
             return (
               <a
                 key={l.href}
                 href={l.href}
                 className={`rounded-full px-3 py-2 text-xs font-semibold uppercase transition-all ${
-                  isActive
-                    ? "border border-disc bg-ink text-page"
-                    : "hover:bg-line"
+                  isActive ? "border border-disc bg-ink text-page" : "hover:bg-line"
                 }`}
               >
                 {l.label}
@@ -333,7 +417,7 @@ function Header({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {
           })}
         </nav>
 
-        {/* Pull-cord theme switch inspired by Ayush Das’s portfolio. */}
+        {/* Existing pull-cord theme switch is unchanged. */}
         <LightPullThemeSwitcher dark={dark} onToggle={onToggle} />
       </div>
 
@@ -344,15 +428,12 @@ function Header({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {
       >
         {nav.map((l) => {
           const isActive = activeSection === l.href.replace("#", "");
-
           return (
             <a
               key={l.href}
               href={l.href}
               className={`min-w-0 rounded-full px-1.5 py-2 text-center text-[10px] font-semibold uppercase transition-colors sm:text-xs ${
-                isActive
-                  ? "border border-disc bg-ink text-page"
-                  : "border border-line hover:bg-line"
+                isActive ? "border border-disc bg-ink text-page" : "border border-line hover:bg-line"
               }`}
             >
               {l.label}
@@ -1498,15 +1579,12 @@ export default function App() {
         body { overflow-x: clip; }
         @media (hover: hover) and (pointer: fine) {
           html.portfolio-custom-cursor,
-          html.portfolio-custom-cursor body,
-          html.portfolio-custom-cursor a,
-          html.portfolio-custom-cursor button,
-          html.portfolio-custom-cursor input,
-          html.portfolio-custom-cursor textarea,
-          html.portfolio-custom-cursor select,
-          html.portfolio-custom-cursor summary,
-          html.portfolio-custom-cursor [role="button"] {
+          html.portfolio-custom-cursor * {
             cursor: none !important;
+          }
+          /* FaceCanvas grab ring is visual-only; keep its drag behaviour, not its second cursor. */
+          html.portfolio-custom-cursor .grab-ring {
+            display: none !important;
           }
         }
         .portfolio-cursor-ring svg {
@@ -1524,7 +1602,7 @@ export default function App() {
         }
       `}</style>
       <DesignerBackground dark={dark} />
-      <CustomCursor dark={dark} stageRef={stageRef} />
+      <CustomCursor dark={dark} />
       <Header dark={dark} onToggle={toggle} />
 
       {/* Hero Section with WebGL Face */}
